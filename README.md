@@ -6,4 +6,4 @@ Ex. 1 is a norming study to assess the a priori expectations of 4-5-year-olds ab
 
 Ex. 2 and Ex. 3 look at whether 4-5-year-olds will update their expectations after being exposed to a speaker who is biased to use either "some" or "many" to describe proportions of 50%. (Ex. 3 is a replication of Ex. 2 with the questions pre-recorded rather than asked by the experimenter). 
 
-Ex. 4 looks at whether they can update their expectations for two speakers at the same time (one who is many-biased and one who is some-biased). They do initially, but the effect is not long-lasting (e.g., they answer correctly during the first trial block but incorrectly during the second trial block). 
+Ex. 4 looks at whether they can update their expectations for two speakers at the same time (one who is many-biased and one who is some-biased). They do initially, but the effect is not long-lasting (i.e., they answer correctly during the first trial block but incorrectly during the second trial block). 
