@@ -1,0 +1,63 @@
+---
+title: "Ex. 1 Analyis"
+output: html_document
+date: "2023-11-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source('helper functions.R')
+```
+
+```{r}
+data <- read.csv("Ex. 1 Data.csv")
+
+data_pivot <- data %>% pivot_longer(c(-Subject.ID))
+data_mutate <- data_pivot %>% mutate(nCandies = sub("X([0-9]).*", "\\1", name, perl = TRUE)) %>%
+                mutate(nCandies=as.numeric(nCandies))
+
+data_final_temp <- data_mutate %>% mutate(clean_num = case_when(grepl("some", value)~0,
+                                                               grepl("many", value)~1
+                                                               ))
+
+data_final <- data_final_temp %>% filter(!is.na(clean_num) & !(value=="other"))
+
+```
+
+
+```{r}
+means_many <- data_final %>%
+  group_by(Subject.ID, nCandies) %>% 
+  summarise(subject_mean = mean(clean_num)) %>%
+  group_by(nCandies) %>%
+  summarise(mean= mean(subject_mean),
+         ci_high = mean+ ci.high(subject_mean), 
+         ci_low = mean- ci.low(subject_mean)
+         )
+
+data_final_temp <- data_mutate %>% mutate(clean_num = case_when(grepl("some", value)~1,
+                                                               grepl("many", value)~0
+                                                               ))
+
+data_final <- data_final_temp %>% filter(!is.na(clean_num) & !(value=="other"))
+
+
+means_some <- data_final %>%
+  group_by(Subject.ID, nCandies) %>% 
+  summarise(subject_mean = mean(clean_num)) %>%
+  group_by(nCandies) %>%
+  summarise(mean= mean(subject_mean),
+         ci_high = mean+ ci.high(subject_mean), 
+         ci_low = mean- ci.low(subject_mean)
+         )
+
+means_some$response <- "some"
+means_many$response <- "many"
+
+means_total <- rbind(means_many, means_some)
+
+ggplot(data=means_total, aes(x=nCandies, y=mean, color = response)) + geom_line() + geom_point() + labs(title = "A priori expectations for use of some and many for proportions out of 10", x= "Number of Candies", y = "Proportion of each choice") + geom_errorbar(ymin=means_total$ci_low, ymax=means_total$ci_high) + ylim(0,1)
+
+
+```
+
