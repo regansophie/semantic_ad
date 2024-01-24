@@ -1,0 +1,73 @@
+---
+title: "Ex. 3 Analysis"
+output: html_document
+date: "2023-11-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source('helper functions.R')
+```
+
+```{r}
+#reading in the data
+data_csv <- read.csv("Study 4 Final Data.csv")
+
+```
+
+
+```{r}
+#removing participants who failed the catch trials
+data_csv <- data_csv %>% filter(catch.1 == "x" & (check.2 =="x" | check.2 == "skipped") & (check.3 =="x" | check.3 == "skipped") & (check.4 =="x" | check.4 == "skipped") & (check.5 =="x" | check.5 == "skipped") & (check.6 =="x" | check.6 == "skipped") & (check.7 =="x" | check.7 == "skipped") & (check.8 =="x" | check.8 == "skipped"))
+
+data <- data_csv %>% pivot_longer(c(-Particpant, -Age, -Gender, -Condition))
+
+#adding a column for number of candies and phase
+data.post <- data %>% filter(grepl("^S.[0-9]",name))
+data.post <- data.post %>% mutate(nCandies = sub("S.([0-9]).*", "\\1", name, perl = TRUE)) %>% mutate(nCandies=as.numeric(nCandies))
+data.post$phase <- "Phase 2"
+
+data.pre <- data %>% filter(grepl("^X",name))
+data.pre <- data.pre %>% mutate(nCandies = sub("X([0-9]).*", "\\1", name, perl = TRUE)) %>% mutate(nCandies=as.numeric(nCandies))
+data.pre$phase <- "Phase 1"
+
+#adding numeric values: 1 if response is many, 0 if response is some; filter out any other response
+data.full <- rbind(data.pre,data.post)
+data.full <- data.full %>% mutate(num_response = case_when(value=="many"~1, value == "some"~0))
+data.full <- data.full %>% filter(!is.na(num_response))
+
+data.full <- data.full %>% mutate(speaker = case_when((Condition == "Some-First" & phase == "Phase 1") ~ "some-biased",
+                                                      (Condition == "Many-First" & phase == "Phase 2") ~ "some-biased",
+                                                      .default = "many-biased"))
+
+#finding means and confidence intervals
+means <- data.full %>%
+  group_by(Particpant, phase, nCandies, Condition) %>% 
+  summarise(subject_mean = mean(num_response)) %>%
+  group_by(phase, nCandies, Condition) %>%
+  summarise(mean= mean(subject_mean),
+         ci_high = mean+ ci.high(subject_mean), 
+         ci_low = mean- ci.low(subject_mean)
+         )
+  
+ggplot(means, aes(x = nCandies, y = mean, color=Condition)) + geom_point() + geom_line() + geom_errorbar(ymin = means$ci_low, ymax= means$ci_high) + labs(x = "Number of Candies out of 10", y= "Proportion Choosing Many") + ylim(0,1) + facet_wrap(~phase)
+
+ggplot(means, aes(x = nCandies, y = mean, color=phase)) + geom_point() + geom_line() + geom_errorbar(ymin = means$ci_low, ymax= means$ci_high) + labs(x = "Number of Candies out of 10", y= "Proportion Choosing Many") + ylim(0,1) + facet_wrap(~Condition)
+
+
+```
+
+
+```{r}
+data.full$n_centered <- data.full$nCandies-5
+
+#pre-registered model
+model <- glmer(num_response ~ n_centered * Condition * phase  + (1 | Particpant), 
+      data = data.full, 
+      family = "binomial")
+
+summary(model)
+```
+
+
+
