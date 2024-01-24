@@ -1,0 +1,261 @@
+---
+title: "Ex. 2 Analysis"
+output: html_document
+date: "2023-11-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source('helper functions.R')
+```
+
+```{r}
+#reading in the data
+data.many_csv <- read.csv("Study 3 (Study 2 Rep) Final Data - Many Condition.csv")
+data.some_csv <- read.csv("Study 3 (Study 2 Rep) Final Data - Some Condition.csv")
+```
+
+
+```{r}
+
+#removing participants who failed the catch trials
+data.many_csv <- data.many_csv %>% filter(catch.1 == "x" & (catch.2 =="x" | catch.2 == "skipped") & (catch.3 =="x" | catch.3 == "skipped") & (catch.4 =="x" | catch.4 == "skipped") & (catch.5 =="x" | catch.5 == "skipped") & (catch.6 =="x" | catch.6 == "skipped") & (catch.7 =="x" | catch.7 == "skipped") & (catch.8 =="x" | catch.8 == "skipped"))
+
+data.many <- data.many_csv %>% pivot_longer(c(-Subject.ID, -Age, -Gender))
+
+data.many$condition = "many"
+
+#adding a column for number of candies and phase
+data.post.many <- data.many %>% filter(grepl("^X",name))
+data.post.many <- data.post.many %>% mutate(nCandies = sub("X([0-9]).*", "\\1", name, perl = TRUE)) %>% mutate(nCandies=as.numeric(nCandies))
+data.post.many$phase <- "post"
+
+data.pre.many <- data.many %>% filter(grepl("^PE.[0-9]",name))
+data.pre.many <- data.pre.many %>% mutate(nCandies = sub("PE.([0-9]).*", "\\1", name, perl = TRUE)) %>% mutate(nCandies=as.numeric(nCandies))
+data.pre.many$phase <- "pre"
+
+#adding numeric values: 1 if response is many, 0 if response is some; filter out any other response
+data.many.full <- rbind(data.pre.many,data.post.many)
+data.many.full <- data.many.full %>% mutate(num_response = case_when(value=="many"~1, value == "some"~0))
+data.many.full <- data.many.full %>% filter(!is.na(num_response))
+
+#finding means and confidence intervals
+many_condition_means <- data.many.full %>%
+  group_by(Subject.ID, phase, nCandies) %>% 
+  summarise(subject_mean = mean(num_response)) %>%
+  group_by(phase, nCandies) %>%
+  summarise(mean= mean(subject_mean),
+         ci_high = mean+ ci.high(subject_mean), 
+         ci_low = mean- ci.low(subject_mean)
+         )
+  
+many_condition_means$condition <- "Many-biased Condition"
+
+many_condition_plot <- ggplot(many_condition_means, aes(x = nCandies, y = mean, color=phase)) + geom_point() + geom_line() + geom_errorbar(ymin = many_condition_means$ci_low, ymax= many_condition_means$ci_high) + labs(x = "Number of Candies out of 10", y= "Proportion Choosing Many", title = "Many Condition (e.g., heard the speaker say many for 5/10)") + ylim(0,1)
+
+
+many_condition_plot
+```
+
+
+```{r}
+#removing participants who failed the catch trials
+data.some_csv <- data.some_csv %>% filter(catch.1 == "x" & (catch.2 =="x" | catch.2 == "skipped") & (catch.3 =="x" | catch.3 == "skipped") & (catch.4 =="x" | catch.4 == "skipped") & (catch.5 =="x" | catch.5 == "skipped") & (catch.6 =="x" | catch.6 == "skipped") & (catch.7 =="x" | catch.7 == "skipped") & (catch.8 =="x" | catch.8 == "skipped"))
+
+data.some <- data.some_csv %>% pivot_longer(c(-Subject.ID, -Age, -Gender))
+data.some $condition = "some"
+
+#adding a column for number of candies and phase
+data.post.some <- data.some %>% filter(grepl("^X",name))
+data.post.some <- data.post.some %>% mutate(nCandies = sub("X([0-9]).*", "\\1", name, perl = TRUE)) %>% mutate(nCandies=as.numeric(nCandies))
+data.post.some$phase <- "post"
+
+data.pre.some <- data.some %>% filter(grepl("^PE.[0-9]",name))
+data.pre.some <- data.pre.some %>% mutate(nCandies = sub("PE.([0-9]).*", "\\1", name, perl = TRUE)) %>% mutate(nCandies=as.numeric(nCandies))
+data.pre.some$phase <- "pre"
+
+
+data.some.full <- rbind(data.pre.some,data.post.some)
+
+#adding numeric values: 1 if response is many, 0 if response is some; filter out any other response
+data.some.full <- data.some.full %>% mutate(num_response = case_when(value == "many"~1, value == "some" ~0))
+data.some.full <- data.some.full %>% filter(!is.na(num_response))
+
+#combining many condition data and some condition data
+data_total <- rbind(data.some.full, data.many.full)
+
+#centering number of candies
+data_total$n_centered <- data_total$nCandies-5
+
+
+#finding means and confidence intervals
+some_condition_means <- data.some.full %>%
+  group_by(Subject.ID, phase, nCandies) %>% 
+  summarise(subj_mean = mean(num_response)) %>%
+  group_by(phase, nCandies) %>%
+  summarise(mean = mean(subj_mean),
+         ci_high = mean + ci.high(subj_mean), 
+         ci_low = mean - ci.low(subj_mean)
+         )
+
+some_condition_plot <- ggplot(some_condition_means, aes(x = nCandies, y = mean, color=phase)) + 
+    geom_point() + geom_line() + geom_errorbar(ymin = some_condition_means$ci_low, ymax= some_condition_means$ci_high) + 
+  labs(x = "Number of Candies out of 10", y= "Proportion Choosing Many", title = "Some Condition (e.g., heard the speaker say some for proportions of 5/10)") + ylim(0,1)
+
+some_condition_plot
+
+#creating a data frame to plot both the change in some responses and many responses (change in some and many are basically mirror image after removing "other" responses, so it is not super informative, but it makes a nice looking plot)
+data.some.full_some <- data.some.full %>% mutate(num_response_reversed = case_when(num_response == 0 ~ 1,
+                                                                                   .default = 0))
+some_condition_means_some = data.some.full_some %>%
+  group_by(Subject.ID, phase, nCandies) %>% 
+  summarise(participant_mean = mean(num_response_reversed)) %>%
+  group_by(phase, nCandies) %>%
+  summarise(mean= mean(participant_mean),
+         ci_high = mean+ ci.high(participant_mean), 
+         ci_low = mean- ci.low(participant_mean)
+         )
+  
+some_condition_means_some$response <- "some"
+some_condition_means$response <- "many"
+some_condition_means_some$condition <- "Some-biased Condition"
+some_condition_means$condition <- "Some-biased Condition"
+some_total <- rbind(some_condition_means_some, some_condition_means)
+
+data.many.full_some <- data.many.full %>% mutate(num_response_reversed = case_when(num_response == 0 ~ 1,
+                                                                                   .default = 0))
+many_condition_means_some = data.many.full_some %>%
+  group_by(Subject.ID, phase, nCandies) %>% 
+  summarise(participant_mean = mean(num_response_reversed)) %>%
+  group_by(phase, nCandies) %>%
+  summarise(mean = mean(participant_mean),
+         ci_high = mean + ci.high(participant_mean), 
+         ci_low = mean - ci.low(participant_mean)
+         )
+
+many_condition_means_some$response <- "some"
+many_condition_means$response <- "many"
+many_total <- rbind(many_condition_means_some, many_condition_means)
+many_total$condition <- "Many-biased Condition"
+
+total_means_many <- rbind(many_condition_means, some_condition_means)
+total_means <- rbind(some_total, many_total)
+
+change_in_many_response_plot <- ggplot(total_means_many, aes(x = nCandies, y = mean, color=condition)) + 
+    geom_point() + geom_line() + geom_errorbar(ymin = total_means_many$ci_low, ymax= total_means_many$ci_high) +   
+  facet_wrap(~phase) + labs(x = "Number of Candies out of 10", y = "Proportion Choosing Many", title = "Mean Choice of Many over Some by condition and phase") + ylim(0,1)
+
+change_in_many_response_plot
+
+total_change_plot <- ggplot(total_means, aes(x = nCandies, y = mean, color=response, lty=phase)) + 
+    geom_point() + geom_line() + geom_errorbar(ymin = total_means$ci_low, ymax= total_means$ci_high) + facet_wrap(~condition) +
+    labs(x = "Number of Candies out of 10", y = "Proportion of each choice", title = "Mean Change in Choice of Some and Many by phase and condition") + ylim(0,1)
+
+total_change_plot
+```
+
+
+```{r}
+#pre-registered model
+prepost_model <- glmer(num_response ~ n_centered * condition * phase  + (1 | Subject.ID), 
+      data = data_total, 
+      family = "binomial")
+
+summary(prepost_model)
+```
+
+
+There doesn't seem to be much of an effect in the "some" condition, but maybe this is because for 5/10 candies, participants were already expecting the speaker to say "some" (>80%), so the exposure did not provide any new information. Below, I repeat the above analysis and recreate the plots, but I remove any participant who exclusively answered "some" for 5/10 (aka anyone who was already at ceiling so could not have adapted for the target proportion).
+```{r}
+data_many_exlude_ceiling <- data.many_csv %>% filter(PE.5 == "some" | PE.5.1 == "some" | PE.5.2 == "some")
+
+data_many_exlude_ceiling <- data_many_exlude_ceiling %>% pivot_longer(c(-Subject.ID, -Age, -Gender))
+
+
+data_many_exlude_ceiling$condition = "many"
+
+#adding a column for number of candies and phase
+data.post.many <- data_many_exlude_ceiling %>% filter(grepl("^X",name))
+data.post.many <- data.post.many %>% mutate(nCandies = sub("X([0-9]).*", "\\1", name, perl = TRUE)) %>% mutate(nCandies=as.numeric(nCandies))
+data.post.many$phase <- "post"
+
+data.pre.many <- data_many_exlude_ceiling %>% filter(grepl("^PE.[0-9]",name))
+data.pre.many <- data.pre.many %>% mutate(nCandies = sub("PE.([0-9]).*", "\\1", name, perl = TRUE)) %>% mutate(nCandies=as.numeric(nCandies))
+data.pre.many$phase <- "pre"
+
+#adding numeric values: 1 if response is many, 0 if response is some; filter out any other response
+data.many.full <- rbind(data.pre.many,data.post.many)
+data.many.full <- data.many.full %>% mutate(num_response = case_when(value=="many"~1, value == "some"~0))
+data.many.full <- data.many.full %>% filter(!is.na(num_response))
+
+#finding means and confidence intervals
+many_condition_means <- data.many.full %>%
+  group_by(Subject.ID, phase, nCandies) %>% 
+  summarise(subject_mean = mean(num_response)) %>%
+  group_by(phase, nCandies) %>%
+  summarise(mean= mean(subject_mean),
+         ci_high = mean+ ci.high(subject_mean), 
+         ci_low = mean- ci.low(subject_mean)
+         )
+  
+many_condition_means$condition <- "many"
+
+many_condition_exclude_ceiling_plot <- ggplot(many_condition_means, aes(x = nCandies, y = mean, color=phase)) + geom_point() + geom_line() + geom_errorbar(ymin = many_condition_means$ci_low, ymax= many_condition_means$ci_high) + labs(x = "Number of Candies out of 10", y= "Proportion Choosing Many", title = "Many Condition (excludes participants who only answered many for 5/10)")
+
+many_condition_exclude_ceiling_plot
+```
+
+
+```{r}
+data_some_exlude_ceiling <- data.some_csv %>% filter(PE.5 == "many" | PE.5.1 == "many" | PE.5.2 == "many")
+
+data_some_exlude_ceiling <- data_some_exlude_ceiling %>% pivot_longer(c(-Subject.ID, -Age, -Gender))
+
+data_some_exlude_ceiling$condition = "some"
+
+#adding a column for number of candies and phase
+data.post.some <- data_some_exlude_ceiling %>% filter(grepl("^X",name))
+data.post.some <- data.post.some %>% mutate(nCandies = sub("X([0-9]).*", "\\1", name, perl = TRUE)) %>% mutate(nCandies=as.numeric(nCandies))
+data.post.some$phase <- "post"
+
+data.pre.some <- data_some_exlude_ceiling %>% filter(grepl("^PE.[0-9]",name))
+data.pre.some <- data.pre.some %>% mutate(nCandies = sub("PE.([0-9]).*", "\\1", name, perl = TRUE)) %>% mutate(nCandies=as.numeric(nCandies))
+data.pre.some$phase <- "pre"
+
+#adding numeric values: 1 if response is many, 0 if response is some; filter out any other response
+data.some.full <- rbind(data.pre.some,data.post.some)
+data.some.full <- data.some.full %>% mutate(num_response = case_when(value=="many"~1, value == "some"~0))
+data.some.full <- data.some.full %>% filter(!is.na(num_response))
+
+#finding means and confidence intervals
+some_condition_means <- data.some.full %>%
+  group_by(Subject.ID, phase, nCandies) %>% 
+  summarise(subject_mean = mean(num_response)) %>%
+  group_by(phase, nCandies) %>%
+  summarise(mean= mean(subject_mean),
+         ci_high = mean+ ci.high(subject_mean), 
+         ci_low = mean- ci.low(subject_mean)
+         )
+  
+some_condition_means$condition <- "some"
+
+some_condition_exclude_ceiling_plot <- ggplot(some_condition_means, aes(x = nCandies, y = mean, color=phase)) + geom_point() + geom_line() + geom_errorbar(ymin = some_condition_means$ci_low, ymax= some_condition_means$ci_high) + labs(x = "Number of Candies out of 10", y= "Proportion Choosing Many", title = "Some Condition (excludes participants who only answered some for 5/10)")
+
+
+some_condition_exclude_ceiling_plot
+
+total_exclusion_data <- rbind(data.some.full, data.many.full)
+```
+
+Re-running the model with the trimmed data
+```{r}
+total_exclusion_data$n_centered <- total_exclusion_data$nCandies-5
+
+excluded_model <- glmer(num_response ~ n_centered * condition * phase  + (1 | Subject.ID), 
+      data = total_exclusion_data, 
+      family = "binomial")
+
+summary(excluded_model)
+```
+
+
